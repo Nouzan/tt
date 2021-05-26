@@ -42,9 +42,9 @@ impl Opt {
             .install_simple()?;
         let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
         tracing_subscriber::registry()
-            .with(opentelemetry)
             .with(level)
             .with(fmt)
+            .with(opentelemetry)
             .try_init()?;
         Ok(opt)
     }

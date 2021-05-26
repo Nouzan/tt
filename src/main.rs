@@ -2,6 +2,7 @@ mod cli;
 
 use anyhow::Result;
 use cli::Opt;
+use opentelemetry::global;
 
 #[macro_use]
 extern crate tracing;
@@ -16,10 +17,12 @@ fn run() -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
     let opt = Opt::init_from_args()?;
-    let root = span!(tracing::Level::DEBUG, "app_start");
+    let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
     let _enter = root.enter();
     debug!("opt={:?}", opt);
     run()?;
+    global::shutdown_tracer_provider();
     Ok(())
 }

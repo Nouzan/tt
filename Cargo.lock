@@ -803,6 +803,7 @@ dependencies = [
  "anyhow",
  "clap-verbosity-flag",
  "log",
+ "opentelemetry",
  "opentelemetry-jaeger",
  "structopt",
  "tracing",
