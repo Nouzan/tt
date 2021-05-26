@@ -1,0 +1,145 @@
+name: Rust && Docker (Nightly)
+
+on:
+  push:
+    # Publish `master` as Docker `latest` image.
+    branches:
+      - master
+
+    # # Publish `v1.2.3` tags as releases.
+    # tags:
+    #   - v*
+
+  # Run tests for any PRs.
+  pull_request:
+    branches:
+      - master
+
+env:
+  # TODO: Change variable to your image's name.
+  IMAGE_NAME: tt
+
+jobs:
+    rust-test:
+        name: Test on Rust ${{ matrix.rust }}
+        runs-on: ubuntu-latest
+        if: "!contains(github.event.head_commit.message, 'skip ci')"
+
+        strategy:
+          matrix:
+            rust:
+              - stable
+              - beta
+              - nightly
+              - 1.51.0 # MSRV
+
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v2
+
+          - name: Cancel Previous Runs
+            uses: styfle/cancel-workflow-action@0.6.0
+            with:
+              access_token: ${{ github.token }}
+
+          - name: Install Rust Toolchain
+            uses: actions-rs/toolchain@v1
+            if: ${{ !contains(github.event.head_commit.message, 'skip test') }}
+            with:
+              profile: minimal
+              toolchain: ${{ matrix.rust }}
+              override: true
+              components: rustfmt, clippy
+
+          - name: Build
+            uses: actions-rs/cargo@v1
+            if: ${{ !contains(github.event.head_commit.message, 'skip test') }}
+            with:
+              command: build
+              args: --all-features
+
+          - name: Check Format
+            uses: actions-rs/cargo@v1
+            if: ${{ !contains(github.event.head_commit.message, 'skip test') }}
+            with:
+              command: fmt
+              args: --all -- --check
+
+          - name: Lint
+            uses: actions-rs/cargo@v1
+            if: ${{ !contains(github.event.head_commit.message, 'skip test') }}
+            with:
+              command: clippy
+              args: --all --all-targets --all-features
+
+          - name: Test
+            uses: actions-rs/cargo@v1
+            if: ${{ !contains(github.event.head_commit.message, 'skip test') }}
+            with:
+              command: test
+              args: --all-features
+
+  # Run tests.
+  # See also https://docs.docker.com/docker-hub/builds/automated-testing/
+    docker-test:
+      name: Test in docker
+      runs-on: ubuntu-latest
+      if: "!contains(github.event.head_commit.message, 'skip ci')"
+
+      steps:
+        - uses: actions/checkout@v2
+
+        - name: Cancel Previous Runs
+          uses: styfle/cancel-workflow-action@0.6.0
+          with:
+            access_token: ${{ github.token }}
+
+        - name: Run tests
+          if: ${{ !contains(github.event.head_commit.message, 'skip test') }}
+          run: |
+            if [ -f docker-compose.test.yml ]; then
+              docker-compose --file docker-compose.test.yml build
+              docker-compose --file docker-compose.test.yml run sut
+            else
+              docker build . --file Dockerfile
+            fi
+  # Push image to GitHub Packages.
+  # See also https://docs.docker.com/docker-hub/builds/
+    push:
+      name: Push docker image
+      # Ensure test job passes before pushing image.
+      needs: [rust-test, docker-test]
+
+      runs-on: ubuntu-latest
+      if: "github.event_name == 'push' && !contains(github.event.head_commit.message, 'skip push')"
+
+      steps:
+        - uses: actions/checkout@v2
+
+        - name: Build image
+          run: docker build . --file Dockerfile --tag $IMAGE_NAME
+
+        - name: Log into GitHub Container Registry
+      # TODO: Create a PAT with `read:packages` and `write:packages` scopes and save it as an Actions secret `CR_PAT`
+          run: echo "${{ secrets.CR_PAT }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+
+        - name: Get current date
+          id: date
+          run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+        - name: Push image to GitHub Container Registry
+          env:
+            DATE: ${{ steps.date.outputs.date }}
+          run: |
+            IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
+            # Change all uppercase to lowercase
+            IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+            VERSION=nightly
+            VERSION_WITH_DATE=$VERSION-$DATE
+            echo IMAGE_ID=$IMAGE_ID
+            echo VERSION=$VERSION
+            echo VERSION_WITH_DATE=$VERSION_WITH_DATE
+            docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
+            docker tag $IMAGE_NAME $IMAGE_ID:$VERSION_WITH_DATE
+            docker push $IMAGE_ID:$VERSION
+            docker push $IMAGE_ID:$VERSION_WITH_DATE
