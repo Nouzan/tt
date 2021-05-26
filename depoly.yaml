@@ -1,0 +1,14 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tt
+spec:
+  template:
+    metadata:
+      name: tt-pod
+    spec:
+      containers:
+      - name: tt
+        image: tt
+        imagePullPolicy: Never
+      restartPolicy: Never
