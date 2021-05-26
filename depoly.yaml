@@ -1,15 +1,19 @@
-apiVersion: batch/v1
-kind: Job
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: tt
   annotations:
     "sidecar.jaegertracing.io/inject": "true"
 spec:
+  selector:
+    matchLabels:
+      app: tt
   template:
     metadata:
-      name: tt-pod
+      labels:
+        app: tt
     spec:
       containers:
       - name: tt
-        image: ghcr.io/nouzan/tt:nightly-2021-05-26
-      restartPolicy: Never
+        image: ghcr.io/nouzan/tt:nightly
+
