@@ -11,6 +11,6 @@ RUN cargo install --path .
 # Copy to image
 FROM debian:buster-slim
 WORKDIR /usr/src/app
-COPY --from=builder /usr/local/cargo/bin/tracing-tui /bin
+COPY --from=builder /usr/local/cargo/bin/tt /bin
 RUN apt-get update && apt-get install -y libssl-dev pkg-config libpq-dev brotli
-CMD [ "/bin/tracing-tui" ]
+CMD [ "/bin/tt" ]
